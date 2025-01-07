@@ -1,3 +1,7 @@
+백엔드 실시간 기능 호출 테스트용.
+
+
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
