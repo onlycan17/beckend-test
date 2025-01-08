@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { startExam, pauseExam, resumeExam, stopExam, subscribeToExamStatus } from '@/app/actions/examActions';
 
 interface UseExamCountdownReturn {
@@ -12,12 +12,10 @@ interface UseExamCountdownReturn {
 }
 
 const useExamCountdown = (examQuestionSettingId: number): UseExamCountdownReturn => {
-  const [remainingTime, setRemainingTime] = useState<number>(2400); // 40분 = 2400초
+  const [remainingTime, setRemainingTime] = useState<number>(2400);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
-
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://ff350a6295bd.ngrok.app';
 
   const closeEventSource = () => {
     if (eventSource) {
@@ -32,9 +30,56 @@ const useExamCountdown = (examQuestionSettingId: number): UseExamCountdownReturn
 
   const startCountdown = async () => {
     try {
-      await startExam(examQuestionSettingId);
-      // SSE 연결 설정...
+      // 시험 시작 및 초기 시간 구독
+      const stream = await startExam(examQuestionSettingId);
+      
+      if (!stream) {
+        throw new Error('Failed to get stream');
+      }
+
+      const reader = stream.getReader();
+      const decoder = new TextDecoder();
+
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            console.log('done', done);
+            console.log('value', value);
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            console.log('lines', lines);
+            for (const line of lines) {
+              console.log('line', line);
+              if (line.trim() && line.startsWith('data:')) {
+                try {
+                  const data = JSON.parse(line.slice(5));
+                  console.log('data', data);
+                 
+                  setRemainingTime(data);
+                  console.log('remainingTime', data);
+                  
+                  setIsRunning(true);
+                  console.log('isRunning', true);
+                  
+                } catch (err) {
+                  console.error('Error processing SSE data:', err);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error reading stream:', err);
+          setError('시험 시간 동기화에 실패했습니다.');
+        } finally {
+          reader.releaseLock();
+        }
+      })();
+
     } catch (err) {
+      console.error('Error starting countdown:', err);
       setError('카운트다운 시작 중 오류가 발생했습니다.');
       setIsRunning(false);
     }
@@ -52,14 +97,9 @@ const useExamCountdown = (examQuestionSettingId: number): UseExamCountdownReturn
 
   const resumeCountdown = async () => {
     try {
-      await fetch(`/api/exam-starts/${examQuestionSettingId}/countdown/resume`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      await resumeExam(examQuestionSettingId);
       setIsRunning(true);
+      setError(null);
     } catch (err) {
       setError('카운트다운 재개 중 오류가 발생했습니다.');
     }
@@ -67,16 +107,11 @@ const useExamCountdown = (examQuestionSettingId: number): UseExamCountdownReturn
 
   const stopCountdown = async () => {
     try {
-      await fetch(`/api/exam-starts/${examQuestionSettingId}/countdown`, {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      await stopExam(examQuestionSettingId);
       closeEventSource();
       setIsRunning(false);
       setRemainingTime(2400);
+      setError(null);
     } catch (err) {
       setError('카운트다운 중지 중 오류가 발생했습니다.');
     }
@@ -90,65 +125,6 @@ const useExamCountdown = (examQuestionSettingId: number): UseExamCountdownReturn
       }
     };
   }, [eventSource]);
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
-
-    if (isRunning && remainingTime > 0) {
-      timer = setInterval(() => {
-        setRemainingTime((prevTime) => {
-          const newTime = prevTime - 1;
-          if (newTime <= 0) {
-            if (timer) clearInterval(timer);
-            setIsRunning(false);
-            return 0;
-          }
-          return newTime;
-        });
-      }, 1000);
-    }
-
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isRunning, remainingTime]);
-
-  useEffect(() => {
-    const setupExamSubscription = async () => {
-      try {
-        const stream = await subscribeToExamStatus(examQuestionSettingId);
-        if (!stream) return;
-
-        const reader = stream.getReader();
-        const decoder = new TextDecoder();
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.trim() && line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                setRemainingTime(data.remainingTime);
-                setIsRunning(data.isRunning);
-              } catch (err) {
-                console.error('Error processing exam status:', err);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error setting up exam subscription:', err);
-        setError('시험 상태 구독에 실패했습니다.');
-      }
-    };
-
-    setupExamSubscription();
-  }, [examQuestionSettingId]);
 
   return {
     remainingTime,

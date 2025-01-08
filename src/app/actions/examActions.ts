@@ -3,8 +3,8 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://ff350a6295bd.ngrok.app';
 
 export async function startExam(examQuestionSettingId: number) {
-  const response = await fetch(`${API_BASE_URL}/api/exam-starts/${examQuestionSettingId}/start`, {
-    method: 'POST',
+  const response = await fetch(`${API_BASE_URL}/api/exam-starts/${examQuestionSettingId}/countdown`, {
+    method: 'GET',
     headers: {
       'Content-Type': 'application/json',
     },
@@ -13,12 +13,11 @@ export async function startExam(examQuestionSettingId: number) {
   if (!response.ok) {
     throw new Error('시험 시작에 실패했습니다.');
   }
-  
-  return response.json();
+  return response.body;
 }
 
 export async function pauseExam(examQuestionSettingId: number) {
-  const response = await fetch(`${API_BASE_URL}/api/exam-starts/${examQuestionSettingId}/pause`, {
+  const response = await fetch(`${API_BASE_URL}/api/exam-starts/${examQuestionSettingId}/countdown/pause`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -33,7 +32,7 @@ export async function pauseExam(examQuestionSettingId: number) {
 }
 
 export async function resumeExam(examQuestionSettingId: number) {
-  const response = await fetch(`${API_BASE_URL}/api/exam-starts/${examQuestionSettingId}/resume`, {
+  const response = await fetch(`${API_BASE_URL}/api/exam-starts/${examQuestionSettingId}/countdown/resume`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -48,8 +47,8 @@ export async function resumeExam(examQuestionSettingId: number) {
 }
 
 export async function stopExam(examQuestionSettingId: number) {
-  const response = await fetch(`${API_BASE_URL}/api/exam-starts/${examQuestionSettingId}/stop`, {
-    method: 'POST',
+  const response = await fetch(`${API_BASE_URL}/api/exam-starts/${examQuestionSettingId}/countdown`, {
+    method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
     },
@@ -59,7 +58,7 @@ export async function stopExam(examQuestionSettingId: number) {
     throw new Error('시험 중지에 실패했습니다.');
   }
   
-  return response.json();
+  return response.body;
 }
 
 export async function sendStudentPing(examQuestionSettingId: number, studentId: number) {
